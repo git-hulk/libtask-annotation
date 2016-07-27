@@ -170,10 +170,11 @@ struct Task
 	uint	stksize;
     // 是否已经退出
 	int	exiting;
-    // 在所有协程数组中的索引
+    // 任务在所有协程数组中的索引
 	int	alltaskslot;
     // 是否为系统协程, 在计算是否还有用户协程时，会忽略 system = 1 的协程
 	int	system;
+    // 是否在就绪队列中
 	int	ready;
     // 协程对应函数
 	void	(*startfn)(void*);

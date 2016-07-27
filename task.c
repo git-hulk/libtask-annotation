@@ -11,7 +11,7 @@ int	taskexitval;
 Task	*taskrunning;
 
 Context	taskschedcontext;
-Tasklist	taskrunqueue;
+Tasklist	taskrunqueue; // 就绪队列
 
 Task	**alltask;
 int		nalltask;
@@ -170,6 +170,7 @@ taskcreate(void (*fn)(void*), void *arg, uint stack)
 		}
 	}
 
+    // 放到数组尾部
 	t->alltaskslot = nalltask;
 	alltask[nalltask++] = t;
 
@@ -263,10 +264,11 @@ taskscheduler(void)
 
 	taskdebug("scheduler enter");
 	for(;;){
-        // 当前除了系统携程外没有其他协程, 退出
+        // 当前除了系统协程外没有其他协程, 退出
 		if(taskcount == 0)
 			exit(taskexitval);
 
+        // 处理的顺序是 FIFO
 		t = taskrunqueue.head;
 		if(t == nil){
 			fprint(2, "no runnable tasks! %d tasks stalled\n", taskcount);
@@ -276,26 +278,29 @@ taskscheduler(void)
 		deltask(&taskrunqueue, t);
 		t->ready = 0;
 
-        // 设置为当前正在运行的协程
+        // 把拿出来的就绪任务设置为当前正在执行的任务 
 		taskrunning = t;
         // 协程调度计数 +1
 		tasknswitch++;
 		taskdebug("run %d (%s)", t->id, t->name);
 
-        // 切换到刚拿到的协程
+        // 切换到刚拿到的协程, 调度的核心
+        // 使用 taskschedcontext 保留老的堆栈状态, 把 t->context 设置为新的执行上下文
 		contextswitch(&taskschedcontext, &t->context);
 //print("back in scheduler\n");
 		taskrunning = nil;
 
-		if(t->exiting){
+		if(t->exiting){ // 协程执行完退出
             // 系统协程不计数
 			if(!t->system)
 				taskcount--;
 
-            // 释放对应的结构, 把最后一个协程移动到退出协程的位置
+            // 把数组中最后一个任务放到要删除的任务的位置
+            // 这里判断一下当前任务是不是已经在数据尾部会更加优雅?
 			i = t->alltaskslot;
 			alltask[i] = alltask[--nalltask];
 			alltask[i]->alltaskslot = i;
+            // 释放任务
 			free(t);
 		}
 	}
@@ -366,7 +371,7 @@ needstack(int n)
 	}
 }
 
-// 打印协程信息
+// 打印协程信息, 收到退出信号的时候会调用
 static void
 taskinfo(int s)
 {
@@ -377,7 +382,7 @@ taskinfo(int s)
 	fprint(2, "task list:\n");
 	for(i=0; i<nalltask; i++){
 		t = alltask[i];
-		if(t == taskrunning)
+		if(t == taskrunning) // 嗯, 因为是单线程, 所以正在运行一定也只有一个
 			extra = " (running)";
 		else if(t->ready)
 			extra = " (ready)";
@@ -426,6 +431,7 @@ main(int argc, char **argv)
 	taskargc = argc;
 	taskargv = argv;
 
+    // 设置默认的最小栈大小
 	if(mainstacksize == 0)
 		mainstacksize = 256*1024;
 
