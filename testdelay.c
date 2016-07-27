@@ -12,8 +12,10 @@ Channel *c;
 void
 delaytask(void *v)
 {
+    // sleep v ms后唤醒
 	taskdelay((int)v);
 	printf("awake after %d ms\n", (int)v);
+    // 写入channel, 后面会有recv channel 来计数
 	chansendul(c, 0);
 }
 

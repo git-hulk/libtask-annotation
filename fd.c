@@ -22,22 +22,27 @@ fdtask(void *v)
 	Task *t;
 	uvlong now;
 	
+    // task 标记为系统任务
 	tasksystem();
 	taskname("fdtask");
 	for(;;){
 		/* let everyone else run */
+        // 让党员先跑。哦，不，让其他 task 先跑
 		while(taskyield() > 0)
 			;
 		/* we're the only one runnable - poll for i/o */
 		errno = 0;
 		taskstate("poll");
+        // 设置 poll 等待时间
+        // 如果sleep 队列没有 task 等待唤醒，那么这个 task 也会无限等待
+        // 如果没有延时任务, 启动这个 task, 说明是有其他的 fd 读写？
 		if((t=sleeping.head) == nil)
 			ms = -1;
 		else{
 			/* sleep at most 5s */
 			now = nsec();
 			if(now >= t->alarmtime)
-				ms = 0;
+				ms = 0; // poll 设置为 0 为立即返回
 			else if(now+5*1000*1000*1000LL >= t->alarmtime)
 				ms = (t->alarmtime - now)/1000000;
 			else
@@ -61,6 +66,8 @@ fdtask(void *v)
 		}
 		
 		now = nsec();
+        // 检查是否有已经到了唤醒时间的任务,
+        // 如果有, 从sleep 队列删除, 加入到就绪队列等待执行
 		while((t=sleeping.head) && now >= t->alarmtime){
 			deltask(&sleeping, t);
 			if(!t->system && --sleepingcounted == 0)
@@ -76,26 +83,37 @@ taskdelay(uint ms)
 	uvlong when, now;
 	Task *t;
 	
+    // 启动 fdtask, 作为系统任务
 	if(!startedfdtask){
 		startedfdtask = 1;
 		taskcreate(fdtask, 0, 32768);
 	}
 
 	now = nsec();
+    // 设置唤醒时间
 	when = now+(uvlong)ms*1000000;
+    // 根据唤醒时间来对 task 进行排序
+    // 这里是为了找到最后一个唤醒时间比当前任务早的task
 	for(t=sleeping.head; t!=nil && t->alarmtime < when; t=t->next)
 		;
 
 	if(t){
+        // t != nil, 说明是有任务的唤醒时间比当前的任务的早
+        // 把当前任务放到唤醒时间比它小的位置
 		taskrunning->prev = t->prev;
 		taskrunning->next = t;
 	}else{
+        // t == nil 说明遍历到了 sleep 任务的尾部，仍然没有需要唤醒的任务
+        // 也就是当前任务的唤醒时间也是最大的，放到唤醒队列的尾部
 		taskrunning->prev = sleeping.tail;
 		taskrunning->next = nil;
 	}
 	
+    // 设置该任务的唤醒时间
 	t = taskrunning;
 	t->alarmtime = when;
+    // 上面只是把该任务的指针设置好
+    // 因为这个是双向链表，这里要设置前一个 task 的指针指向这个 task
 	if(t->prev)
 		t->prev->next = t;
 	else
@@ -105,10 +123,14 @@ taskdelay(uint ms)
 	else
 		sleeping.tail = t;
 
+    // 唤醒队列长度计数
 	if(!t->system && sleepingcounted++ == 0)
 		taskcount++;
+    // 切换到其他的 task
 	taskswitch();
 
+    // 如果又切回来，说明该任务又加到了就绪队列，然后被执行到
+    // 也就是休眠的时间到了, 被唤醒
 	return (nsec() - now)/1000000;
 }
 
@@ -190,6 +212,7 @@ fdnoblock(int fd)
 	return fcntl(fd, F_SETFL, fcntl(fd, F_GETFL)|O_NONBLOCK);
 }
 
+// 获取当前时间，单位是纳秒
 static uvlong
 nsec(void)
 {
