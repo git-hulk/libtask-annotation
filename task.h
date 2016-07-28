@@ -122,14 +122,14 @@ struct Altarray
 
 struct Channel
 {
-	unsigned int	bufsize;
-	unsigned int	elemsize;
-	unsigned char	*buf;
-	unsigned int	nbuf;
-	unsigned int	off;
+	unsigned int	bufsize; // 缓冲区大小
+	unsigned int	elemsize; // 元素大小
+	unsigned char	*buf; // 缓冲区
+	unsigned int	nbuf; // 当前缓冲区元素个数
+	unsigned int	off; // 发送偏移
 	Altarray	asend;
 	Altarray	arecv;
-	char		*name;
+	char		*name; // channel 的名字
 };
 
 int		chanalt(Alt *alts);
