@@ -134,16 +134,20 @@ taskdelay(uint ms)
 	return (nsec() - now)/1000000;
 }
 
+// 添加读写事件到 epoll/kqueue
 void
 fdwait(int fd, int rw)
 {
 	int bits;
 
 	if(!startedfdtask){
+        // 第一次调用，创建 fdtask
+        // 这个协程会定时轮询是否有读写事件到来
 		startedfdtask = 1;
 		taskcreate(fdtask, 0, 32768);
 	}
 
+    // 限制最大的连接数，为什么要限制???
 	if(npollfd >= MAXFD){
 		fprint(2, "too many poll file descriptors\n");
 		abort();
@@ -160,11 +164,15 @@ fdwait(int fd, int rw)
 		break;
 	}
 
+    // 设置 fd 属于哪个协程
 	polltask[npollfd] = taskrunning;
+    // 设置fd
 	pollfd[npollfd].fd = fd;
+    // 设置读写位
 	pollfd[npollfd].events = bits;
 	pollfd[npollfd].revents = 0;
 	npollfd++;
+    // 出让 cpu
 	taskswitch();
 }
 
@@ -206,6 +214,7 @@ fdwrite(int fd, void *buf, int n)
 	return tot;
 }
 
+// fd 设置为非阻塞
 int
 fdnoblock(int fd)
 {

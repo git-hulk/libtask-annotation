@@ -42,16 +42,22 @@ taskmain(int argc, char **argv)
 		fprintf(stderr, "usage: tcpproxy localport server remoteport\n");
 		taskexitall(1);
 	}
+    // 远程服务的 ip
 	server = argv[2];
+    // 远程服务的端口
 	port = atoi(argv[3]);
 
+    // 开启 tcp 监听
 	if((fd = netannounce(TCP, 0, atoi(argv[1]))) < 0){
 		fprintf(stderr, "cannot announce on tcp port %d: %s\n", atoi(argv[1]), strerror(errno));
 		taskexitall(1);
 	}
+    // 监听的 fd 设置为非阻塞, netannounce 里面设置过了，作者年纪大了，记性可能不是很好
 	fdnoblock(fd);
+    // 开始接收连接, 内部如果没有连接到来会出让 cpu, 所以这里不会阻塞
 	while((cfd = netaccept(fd, remote, &rport)) >= 0){
 		fprintf(stderr, "connection from %s:%d\n", remote, rport);
+        // 每次来一个新连接都创建一个协程来处理这个请求
 		taskcreate(proxytask, (void*)cfd, STACK);
 	}
 }
@@ -62,6 +68,7 @@ proxytask(void *v)
 	int fd, remotefd;
 
 	fd = (int)v;
+    // 连接远程 server 
 	if((remotefd = netdial(TCP, server, port)) < 0){
 		close(fd);
 		return;
@@ -69,7 +76,9 @@ proxytask(void *v)
 	
 	fprintf(stderr, "connected to %s:%d\n", server, port);
 
+    // 透传请求，需要从客户端读取，然后写到远程
 	taskcreate(rwtask, mkfd2(fd, remotefd), STACK);
+    // 透传响应，需要从服务端读取, 然后写到客户端
 	taskcreate(rwtask, mkfd2(remotefd, fd), STACK);
 }
 
@@ -84,8 +93,10 @@ rwtask(void *v)
 	wfd = a[1];
 	free(a);
 	
+    // 一边读，一边写
 	while((n = fdread(rfd, buf, sizeof buf)) > 0)
 		fdwrite(wfd, buf, n);
+    // 关闭
 	shutdown(wfd, SHUT_WR);
 	close(rfd);
 }
