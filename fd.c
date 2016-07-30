@@ -15,6 +15,7 @@ static Tasklist sleeping;
 static int sleepingcounted;
 static uvlong nsec(void);
 
+// 事件管理的系统协程
 void
 fdtask(void *v)
 {
@@ -40,6 +41,7 @@ fdtask(void *v)
 			ms = -1;
 		else{
 			/* sleep at most 5s */
+            // 如果是有定时任务，那么最多 sleep 5秒
 			now = nsec();
 			if(now >= t->alarmtime)
 				ms = 0; // poll 设置为 0 为立即返回
@@ -48,6 +50,7 @@ fdtask(void *v)
 			else
 				ms = 5000;
 		}
+        // 查询读写事件
 		if(poll(pollfd, npollfd, ms) < 0){
 			if(errno == EINTR)
 				continue;
@@ -56,8 +59,10 @@ fdtask(void *v)
 		}
 
 		/* wake up the guys who deserve it */
+        // 如果有事件到来，唤醒等待的协程
 		for(i=0; i<npollfd; i++){
 			while(i < npollfd && pollfd[i].revents){
+                // 把事件对应的协程重新加入就绪队列
 				taskready(polltask[i]);
 				--npollfd;
 				pollfd[i] = pollfd[npollfd];
@@ -77,6 +82,7 @@ fdtask(void *v)
 	}
 }
 
+// 延时任务
 uint
 taskdelay(uint ms)
 {
