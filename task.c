@@ -286,6 +286,7 @@ taskscheduler(void)
 
         // 切换到刚拿到的协程, 调度的核心
         // 使用 taskschedcontext 保留老的堆栈状态, 把 t->context 设置为新的执行上下文
+        // 后面通过 taskswitch 切换回调度协程
 		contextswitch(&taskschedcontext, &t->context);
 //print("back in scheduler\n");
 		taskrunning = nil;
