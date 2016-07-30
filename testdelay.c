@@ -24,16 +24,20 @@ taskmain(int argc, char **argv)
 {
 	int i, n;
 	
+    // 创建长度为 0 大小的 channel，用来做同步
 	c = chancreate(sizeof(unsigned long), 0);
 
 	n = 0;
 	for(i=1; i<argc; i++){
 		n++;
 		printf("x");
+        // 创建一个延时任务
 		taskcreate(delaytask, (void*)atoi(argv[i]), STACK);
 	}
 
 	/* wait for n tasks to finish */
+    // 等待三个延时任务都结束，这里才会结束
+    // 因为无 buffer 的 channel, 如果没有数据可读会阻塞
 	for(i=0; i<n; i++){
 		printf("y");
 		chanrecvul(c);
